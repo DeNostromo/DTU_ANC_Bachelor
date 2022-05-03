@@ -1,0 +1,102 @@
+%% ANC test 
+clear all;
+close all;
+clc;
+
+% Frequency sweep variables
+fs=48000;
+t0=1/fs;
+ts=1;
+t=0:t0:ts-t0;
+f0=10;
+t1=ts;
+f1=10000;
+
+% Frequency sweep signal
+y=0.5*chirp(t,f0,t1,f1,[]);
+
+%Sound input ID info
+info=audiodevinfo
+info.input(9) 
+
+% Record variables
+fs_rec=fs;
+num_bits=24;
+num_chan=1;
+input_ID_1=8;
+
+% Record object
+recorderObj_1 = audiorecorder(fs, num_bits, num_chan, input_ID_1);
+recorderObj_2 = audiorecorder(fs, num_bits, num_chan, input_ID_1);
+output_ID_1=13; 
+player1=audioplayer(y, fs, 16, output_ID_1);
+
+
+% Play chirp audio
+disp('Start speaking 1.')
+play(player1)
+recordblocking(recorderObj_1,ts);
+disp('End of Recording 1.');
+
+% Store recorded data
+yRec_noANC=getaudiodata(recorderObj_1);
+
+pause(10)
+
+% Play chirp audio
+disp('Start speaking 2.')
+play(player1)
+recordblocking(recorderObj_2,ts);
+disp('End of Recording 2.');
+
+% Store recorded data
+yRec_ANC=getaudiodata(recorderObj_2);
+
+
+% Transfer function estimate using tfestimate
+[ANC_tf, ANC_tf_f] = tfestimate(yRec_noANC, yRec_ANC,2048*4,[],[],fs);
+
+
+% Spectrum of no ANC signal
+yRec_noANC_fft = fft(yRec_noANC);
+
+n = length(yRec_noANC);              % number of samples
+y0 = fftshift(yRec_noANC_fft);           % shift y values
+f0 = (-n/2:n/2-1)*(fs/n);   % 0-centered frequency range
+Amp = abs(y0)/n*2;          % normaliseret, men ganget med 2. 
+
+%Spectrum of ANC signal
+yRec_ANC_fft = fft(yRec_ANC);
+
+n_2 = length(yRec_ANC);                 % number of samples
+y0_2 = fftshift(yRec_ANC_fft);          % shift y values
+f0_2 = (-n_2/2:n_2/2-1)*(fs/n_2);       % 0-centered frequency range
+Amp_2 = abs(y0_2)/n_2*2;                % normaliseret, men ganget med 2. 
+
+
+% Plot spectrum of ANC and noANC 
+figure(1)
+semilogx(f0, db(Amp))
+xlim([0 24000])
+%ylim([-50 0])
+hold on;
+semilogx(f0_2, db(Amp_2 ))
+xlim([0 24000])
+%ylim([-800 200])
+grid on;
+
+
+% Plot frequency and phase response of ANC tfestiamte
+figure(2)
+subplot(2,1,1);
+semilogx(ANC_tf_f, db(abs(ANC_tf)))
+xlim([10 24000])
+ylim([-40 40])
+grid on;
+subplot(2,1,2); 
+semilogx(ANC_tf_f, rad2deg(unwrap(angle(ANC_tf))))
+xlim([10 24000])
+ylim([-4000 4000])
+grid on;
+
+
