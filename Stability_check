@@ -1,0 +1,46 @@
+% %---Stability check---
+% Desired phase margin in degrees
+anc_fil_pm=40;
+% Desired gain margin in dB
+anc_fil_gm=4;
+
+stabil_ok=1;
+filter_stabil_check=anc_fil_open_loop;
+indices=find(abs(rad2deg(unwrap(angle(filter_stabil_check)))) > (180 - anc_fil_pm));
+
+vector_x=[];
+vector_y=[];
+indices_vector=[];
+
+% Gain magin 
+%gain_index=db(abs(filter_stabil_check(indices(i))));
+for i=1:1:length(indices)
+    gain_of_phase=db(abs(filter_stabil_check(indices(i))));
+    if gain_of_phase >= -anc_fil_gm
+        stabil_ok=0;
+        indices_vector=[indices_vector; indices(i)];
+        vector_x=[vector_x; anc_fil_freqz_f_1(indices(i))];
+        vector_y=[vector_y; db(abs(filter_stabil_check(indices(i))))];
+    end
+end
+
+
+% Plot vertical lines of unstable sections for lack of gain margin
+xline_vector=[];
+if stabil_ok==0
+   
+    xline_vector=([xline_vector; vector_x(1)]);
+    diff_vector=diff(indices_vector);
+    for i=1:1:length(diff_vector)
+       if diff_vector(i)  ~=1
+         xline_vector=([xline_vector; vector_x(i)]);  
+         xline_vector=([xline_vector; vector_x(i+1)]);
+       end       
+    end
+    xline_vector=([xline_vector; vector_x(end)]);
+end
+if  stabil_ok==1
+    disp('filter stable')
+else
+    disp('filter unstable')
+end
