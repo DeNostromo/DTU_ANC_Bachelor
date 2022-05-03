@@ -1,0 +1,441 @@
+%% Filter coefficients 
+
+
+clear all;
+clc;
+close all; 
+
+addpath('Filter_functions')
+
+% Sampling freq
+fs=48000;
+%fs=768000;
+
+% Secondary path estimation
+%Read audio 20s signal
+[y_ref,fs_ref] = audioread('secondaryPath_ref_RA5100.wav');
+[y_micL,fs_micL] = audioread('secondaryPath_errorMic_L_RA5100.wav');
+[y_micR,fs_micR] = audioread('secondaryPath_errorMic_R_RA5100.wav');
+
+
+%---Plot of audio signals---
+len=length(y_ref);
+t_audio_signal=0:1/fs:(len/fs)-1/fs;
+length(y_ref);
+figure(1)
+plot(t_audio_signal, y_ref)
+hold on;
+plot(t_audio_signal,y_micL)
+plot(t_audio_signal,y_micR)
+legend('Reference signal', 'Open loop response left ear','Open loop response right ear') 
+xlabel('Time[s]')
+ylabel('Amplitude[Arb. unit]')
+title('Reference signal and open loop response')
+grid on;
+
+%Secondary path estimation(right ear) 
+
+% Transfer function estimate using tfestimate
+[secondary_path_tf, secondary_path_tf_f] = tfestimate(y_ref, y_micR,2048*4,[],[],fs);
+
+
+% Normalized Secondary Path frequency vector
+secondary_path_norm_vect=secondary_path_tf_f./24000.*pi;
+% Secondary Path coefficients
+[Secondary_path_coefficients_b, Secondary_path_coefficients_a]=invfreqz(secondary_path_tf,secondary_path_norm_vect, 1023, 0);
+[wiener_fil_h, wiener_fil_f]=freqz(Secondary_path_coefficients_b,Secondary_path_coefficients_a, 1024, fs);
+
+
+%Plot frequency response of Secondary Path
+figure(3)
+subplot(2,1,1);
+semilogx(secondary_path_tf_f, db(abs(secondary_path_tf)))
+xlim([10 24000])
+ylim([-50 0])
+grid on;
+title('Magnitude response of Secondary Path')
+xlabel('Frequency[Hz]')
+ylabel('Magnitude[dB]')
+subplot(2,1,2); 
+semilogx(secondary_path_tf_f, rad2deg(unwrap(angle(secondary_path_tf))))
+xlim([10 24000])
+ylim([-800 200])
+grid on;
+title('Phase response of Secondary Path')
+xlabel('Frequency[Hz]')
+ylabel('Phase[Degress]')
+
+
+%Plot frequency response of Secondary Path coefficients
+subplot(2,1,1);
+semilogx(wiener_fil_f, db(wiener_fil_h))
+xlim([30 24000])
+ylim([-50 0])
+grid on;
+title('Magnitude response of "Wiener"')
+xlabel('Frequency[Hz]')
+ylabel('Magnitude[dB]')
+subplot(2,1,2); 
+semilogx(wiener_fil_f, rad2deg(unwrap(angle(wiener_fil_h))))
+xlim([30 24000])
+ylim([-800 200])
+grid on;
+title('Phase response of "Wiener"')
+xlabel('Frequency[Hz]')
+ylabel('Phase[Degress]')
+
+
+% filter y_ref with the Secondary Path coefficients to see if it resembles the actual
+%secondary path transfer function 
+y_ref_spc_fil=filter(Secondary_path_coefficients_b, 1, y_ref);
+
+figure(5)
+subplot(2,1,1)
+plot(t_audio_signal,y_micR)
+xlim([0 20])
+ylim([-0.06 0.06])
+title('Reference signal recorded by right microphpne')
+xlabel('Time[s]')
+ylabel('Amplitude[Arb. unit]')
+grid on;
+subplot(2,1,2)
+plot(t_audio_signal, y_ref_spc_fil)
+xlim([0 20])
+ylim([-0.06 0.06])
+title('Filtered reference signal')
+xlabel('Time[s]')
+ylabel('Amplitude[Arb. unit]')
+grid on;
+
+%% Filter design
+close all;
+clc;
+
+% filter #1, low shelf filter
+fc_anc_fil_1=300;
+gain_anc_fil_1=30;
+Q_anc_fil_1=0.7;
+
+[b_anc_fil_1, a_anc_fil_1]=low_shelf_fun(fs, fc_anc_fil_1, gain_anc_fil_1, Q_anc_fil_1);
+[anc_fil_freqz_h_1, anc_fil_freqz_f_1]=freqz(b_anc_fil_1, a_anc_fil_1, 4097, fs);
+
+% filter #6, peak filter
+fc_anc_fil_6=150;
+gain_anc_fil_6=10;
+Q_anc_fil_6=0.4;
+
+[b_anc_fil_6, a_anc_fil_6]=peak_fun(fs, fc_anc_fil_6, gain_anc_fil_6, Q_anc_fil_6);
+[anc_fil_freqz_h_6, anc_fil_freqz_f_6]=freqz(b_anc_fil_6, a_anc_fil_6, 4097, fs);
+
+%filter #9, High shelf filter
+fc_anc_fil_9=1500;
+gain_anc_fil_9=10;
+Q_anc_fil_9=0.7;
+
+[b_anc_fil_9, a_anc_fil_9]=high_shelf_fun(fs, fc_anc_fil_9, gain_anc_fil_9, Q_anc_fil_9);
+[anc_fil_freqz_h_9, anc_fil_freqz_f_9]=freqz(b_anc_fil_9, a_anc_fil_9, 4097, fs);
+
+
+% Combined filter
+anc_fil_only=anc_fil_freqz_h_6.*anc_fil_freqz_h_1.*anc_fil_freqz_h_9; 
+% Secondary Path filtered
+anc_fil_open_loop=secondary_path_tf.*anc_fil_only;
+
+
+% feedback transfer function  
+H_tf=1./(1.+anc_fil_open_loop);
+
+% feedback transfer function model plot
+figure(6)
+subplot(2,1,1);
+semilogx(secondary_path_tf_f, (db(abs(H_tf))))
+grid on;
+title('Magnitude response of ANC feedback transfer function')
+xlabel('Frequency[Hz]')
+ylabel('Magnitude[dB]')
+ylim([-40 40])
+xlim([30 24000])
+subplot(2,1,2); 
+semilogx(secondary_path_tf_f, rad2deg(unwrap(angle(H_tf))))
+xlim([30 24000])
+ylim([-100 100])
+grid on;
+title('Phase response of ANC feedback transfer function')
+xlabel('Frequency[Hz]')
+ylabel('Phase[Degrees]')
+
+
+
+% %---Stability check---
+% Desired phase margin in degrees
+anc_fil_pm=40;
+% Desired gain margin in dB
+anc_fil_gm=4;
+
+stabil_ok=1;
+filter_stabil_check=anc_fil_open_loop;
+indices=find(abs(rad2deg(unwrap(angle(filter_stabil_check)))) > (180 - anc_fil_pm));
+
+vector_x=[];
+vector_y=[];
+indices_vector=[];
+
+% Gain magin 
+%gain_index=db(abs(filter_stabil_check(indices(i))));
+for i=1:1:length(indices)
+    gain_of_phase=db(abs(filter_stabil_check(indices(i))));
+    if gain_of_phase >= -anc_fil_gm
+        stabil_ok=0;
+        indices_vector=[indices_vector; indices(i)];
+        vector_x=[vector_x; anc_fil_freqz_f_1(indices(i))];
+        vector_y=[vector_y; db(abs(filter_stabil_check(indices(i))))];
+    end
+end
+
+
+% Plot vertical lines of unstable sections for lack of gain margin
+xline_vector=[];
+if stabil_ok==0
+   
+    xline_vector=([xline_vector; vector_x(1)]);
+    diff_vector=diff(indices_vector);
+    for i=1:1:length(diff_vector)
+       if diff_vector(i)  ~=1
+         xline_vector=([xline_vector; vector_x(i)]);  
+         xline_vector=([xline_vector; vector_x(i+1)]);
+       end       
+    end
+    xline_vector=([xline_vector; vector_x(end)]);
+end
+if  stabil_ok==1
+    disp('filter stable')
+else
+    disp('filter unstable')
+end
+
+
+% Plot vertical lines of unstable sections for lack of gain margin
+xline_vector=[];
+
+if stabil_ok==0
+    xline_vector=([xline_vector; vector_x(1)]);
+    diff_vector=diff(indices_vector);
+    for i=1:1:length(diff_vector)
+       if diff_vector(i)  ~=1
+         xline_vector=([xline_vector; vector_x(i)]);  
+         xline_vector=([xline_vector; vector_x(i+1)]);
+       end       
+    end
+    xline_vector=([xline_vector; vector_x(end)]);
+end
+
+if  stabil_ok==1 
+    disp('filter stable')
+else
+    disp('filter unstable')
+end
+
+
+% Filters seperatly
+figure(7)
+subplot(2,1,1);
+semilogx(anc_fil_freqz_f_1, db(abs(anc_fil_freqz_h_1)))
+hold on;
+semilogx(anc_fil_freqz_f_1, db(abs(anc_fil_freqz_h_6)))
+semilogx(anc_fil_freqz_f_1, db(abs(anc_fil_freqz_h_9)))
+xlim([10 24000])
+legend('Low shelf', 'Peak', 'High shelf')
+grid on;
+title('Magnitude response of filters separatley')
+xlabel('Frequency(Hz)')
+ylabel('Magnitude[dB]')
+subplot(2,1,2); 
+semilogx(anc_fil_freqz_f_1, rad2deg(unwrap(angle(anc_fil_freqz_h_6))))
+hold on;
+semilogx(anc_fil_freqz_f_1, rad2deg(unwrap(angle(anc_fil_freqz_h_1))))
+semilogx(anc_fil_freqz_f_1, rad2deg(unwrap(angle(anc_fil_freqz_h_9))))
+xlim([10 24000])
+grid on;
+title('Phase response of filters separatley')
+xlabel('Frequency(Hz)')
+ylabel('Phase[Degrees]')
+
+% Filters combined
+figure(8)
+subplot(2,1,1);
+semilogx(anc_fil_freqz_f_1, db(abs(anc_fil_only)))
+xlim([10 24000])
+ylim([0 30])
+grid on;
+title('Magnitude response of filters combined')
+xlabel('Frequency(Hz)')
+ylabel('Magnitude[dB]')
+subplot(2,1,2); 
+semilogx(anc_fil_freqz_f_1, rad2deg(unwrap(angle(anc_fil_only))))
+hold on;
+xlim([10 24000])
+ylim([-50 50])
+grid on;
+title('Phase response of filters combined')
+xlabel('Frequency(Hz)')
+ylabel('Phase[Degrees]')
+
+
+
+% Filtered secondary Path frequency response
+figure(9)
+subplot(2,1,1);
+semilogx(anc_fil_freqz_f_1, db(abs(anc_fil_open_loop)))
+hold on;
+scatter(vector_x,vector_y, 'red', 'filled')
+%scatter(vector_x_2,vector_y_2, 'blue', 'filled')
+set(gca,'xscale','log')
+if  stabil_ok==0
+    for i=1:1:length(xline_vector)
+        xline(xline_vector(i), 'red')
+    end
+end
+xlim([10 24000])
+ylim([-50 50])
+grid on;
+title('Magnitude response of filtered Secondary Path')
+xlabel('Frequency[Hz]')
+ylabel('Magnitude[dB]')
+
+subplot(2,1,2); 
+semilogx(anc_fil_freqz_f_1, rad2deg(unwrap(angle(anc_fil_open_loop))))
+hold on;
+if  stabil_ok==0
+    for i=1:1:length(xline_vector)
+        xline(xline_vector(i), 'red')
+    end
+end
+xlim([10 24000])
+grid on;
+title('Phase response of filtered Secondary Path')
+xlabel('Frequency[Hz]')
+ylabel('Phase[Degrees]')
+
+
+% Feedback simulation, x as input signal
+
+% Initial condition, zeroes
+y_feedBack=0;
+zi=zeros(length(Secondary_path_coefficients_b)-1,1);
+zi_1=zeros(max(length(b_anc_fil_1), length(a_anc_fil_1))-1,1);
+zi_6=zeros(max(length(b_anc_fil_6), length(a_anc_fil_6))-1,1);
+zi_9=zeros(max(length(b_anc_fil_9), length(a_anc_fil_9))-1,1);
+cup_sound_saved=[];
+
+
+% Random noise signal 
+len=100000;
+y_noise=randn(1,len);
+% Simulator noise
+x=y_noise;
+
+
+% Simulation loop
+for i=1:1:length(x)
+    
+    cup_sound=x(i)-y_feedBack;
+    
+    [y_feedBack, zf]=filter(Secondary_path_coefficients_b, 1,cup_sound, zi);
+    zi=zf;
+
+    [y_feedBack, zf_1]=filter(b_anc_fil_1, a_anc_fil_1,y_feedBack, zi_1);
+    zi_1=zf_1;
+
+    [y_feedBack, zf_6]=filter(b_anc_fil_6, a_anc_fil_6,y_feedBack, zi_6);
+    zi_6=zf_6;
+ 
+    [y_feedBack, zf_9]=filter(b_anc_fil_9, a_anc_fil_9,y_feedBack, zi_9);
+    zi_9=zf_9;
+    
+    cup_sound_saved=[cup_sound_saved; cup_sound];
+    
+end 
+%disp('loop end')
+
+% Closed loop magnitude and phase response 
+[anc_tf, anc_tf_f] = tfestimate(y_noise, cup_sound_saved,2048,[],[],fs);
+
+
+writematrix(anc_tf); 
+type 'anc_tf.txt';
+writematrix(anc_tf_f); 
+type 'anc_tf_f.txt';
+
+
+% Frequency response of Model
+figure(10)
+subplot(2,1,1);
+%semilogx(anc_tf_f, db(abs(anc_tf)))
+%hold on;
+semilogx(secondary_path_tf_f, (db(abs(H_tf))))
+hold off;
+xlim([0 24000])
+grid on;
+title('Magnitude response of model of feedback ANC system')
+xlabel('Frequency[Hz]')
+ylabel('Magnitude[dB]')
+ylim([-50 50])
+xlim([10 24000])
+%legend('ANC feedback simulation', 'ANC feedback transfer function')
+subplot(2,1,2); 
+%semilogx(anc_tf_f, rad2deg(unwrap(angle(anc_tf))))
+%hold on;
+semilogx(secondary_path_tf_f, rad2deg(unwrap(angle(H_tf))))
+hold off;
+xlim([10 24000])
+ylim([-100 100])
+grid on;
+title('Phase response of model of feedback ANC system')
+%legend('ANC feedback simulation', 'ANC feedback transfer function')
+xlabel('Frequency[Hz]')
+ylabel('Phase[Degrees]')
+
+
+
+% Frequency response of Model and simulation
+figure(11)
+subplot(2,1,1);
+semilogx(anc_tf_f, db(abs(anc_tf)))
+hold on;
+semilogx(secondary_path_tf_f, (db(abs(H_tf))))
+hold off;
+xlim([0 24000])
+grid on;
+title('Magnitude response of simulation of feedback ANC system')
+xlabel('Frequency[Hz]')
+ylabel('Magnitude[dB]')
+ylim([-50 50])
+xlim([10 24000])
+legend('ANC feedback simulation', 'ANC feedback model')
+subplot(2,1,2); 
+semilogx(anc_tf_f, rad2deg(unwrap(angle(anc_tf))))
+hold on;
+semilogx(secondary_path_tf_f, rad2deg(unwrap(angle(H_tf))))
+hold off;
+xlim([10 24000])
+ylim([-100 100])
+grid on;
+title('Phase response of simulation of feedback ANC system')
+legend('ANC feedback simulation', 'ANC feedback model')
+xlabel('Frequency[Hz]')
+ylabel('Phase[Degrees]')
+
+
+%Coefficients 
+disp('Filter 1 coefficients')
+b_anc_fil_1./a_anc_fil_1(1)
+a_anc_fil_1./a_anc_fil_1(1)
+
+disp('Filter 2 coefficients')
+b_anc_fil_6./a_anc_fil_6(1)
+a_anc_fil_6./a_anc_fil_6(1)
+
+disp('Filter 3 coefficients')
+b_anc_fil_9./a_anc_fil_9(1)
+a_anc_fil_9./a_anc_fil_9(1)
+
