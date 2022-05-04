@@ -100,3 +100,23 @@ ylim([-4000 4000])
 grid on;
 
 
+% Identify max attenuation and the atteunation frequency range
+%From 200 - 700 Hz
+freq_range_start=200;
+freq_range_end=700;
+
+freq_range_start_index=find(f0==freq_range_start);
+freq_range_end_index=find(f0==freq_range_end);
+
+amp_freq=db(Amp(freq_range_start_index:freq_range_end_index));
+amp_freq_2=db(Amp_2(freq_range_start_index:freq_range_end_index));
+
+diff_vec=abs(amp_freq-amp_freq_2);
+max_attenuation=max(diff_vec)
+
+max_attenuation_index=find(diff_vec==max_attenuation);
+
+f0_range=f0(freq_range_start_index:freq_range_end_index);
+max_attenuation_freq=f0_range(max_attenuation_index)
+
+
