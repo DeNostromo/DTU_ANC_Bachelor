@@ -1,4 +1,6 @@
 %% Filter coefficients 
+% Note that the filter functions can be found here: 
+% https://github.com/DeNostromo/DTU_ANC_Bachelor
 
 
 clear all;
@@ -107,9 +109,9 @@ xlabel('Time[s]')
 ylabel('Amplitude[Arb. unit]')
 grid on;
 
-%% Filter design
-close all;
-clc;
+%% ---Filter design---
+% Note that the filter functions can be found here: 
+% https://github.com/DeNostromo/DTU_ANC_Bachelor
 
 % filter #1, low shelf filter
 fc_anc_fil_1=300;
