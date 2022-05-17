@@ -45,7 +45,8 @@ grid on;
 secondary_path_norm_vect=secondary_path_tf_f./24000.*pi;
 % Secondary Path coefficients
 [Secondary_path_coefficients_b, Secondary_path_coefficients_a]=invfreqz(secondary_path_tf,secondary_path_norm_vect, 1023, 0);
-[wiener_fil_h, wiener_fil_f]=freqz(Secondary_path_coefficients_b,Secondary_path_coefficients_a, 1024, fs);
+
+[fil_coef_h, fil_coef_f]=freqz(Secondary_path_coefficients_b,Secondary_path_coefficients_a, 1024, fs);
 
 
 %Plot frequency response of Secondary Path
@@ -70,19 +71,19 @@ ylabel('Phase[Degress]')
 
 %Plot frequency response of Secondary Path coefficients
 subplot(2,1,1);
-semilogx(wiener_fil_f, db(wiener_fil_h))
+semilogx(fil_coef_f, db(fil_coef_h))
 xlim([30 24000])
 ylim([-50 0])
 grid on;
-title('Magnitude response of "Wiener"')
+title('Magnitude response of fil_coef')
 xlabel('Frequency[Hz]')
 ylabel('Magnitude[dB]')
 subplot(2,1,2); 
-semilogx(wiener_fil_f, rad2deg(unwrap(angle(wiener_fil_h))))
+semilogx(fil_coef_f, rad2deg(unwrap(angle(fil_coef_h))))
 xlim([30 24000])
 ylim([-800 200])
 grid on;
-title('Phase response of "Wiener"')
+title('Phase response of fil_coef')
 xlabel('Frequency[Hz]')
 ylabel('Phase[Degress]')
 
@@ -109,9 +110,8 @@ xlabel('Time[s]')
 ylabel('Amplitude[Arb. unit]')
 grid on;
 
-%% ---Filter design---
-% Note that the filter functions can be found here: 
-% https://github.com/DeNostromo/DTU_ANC_Bachelor
+%% Filter design
+
 
 % filter #1, low shelf filter
 fc_anc_fil_1=300;
@@ -440,4 +440,6 @@ a_anc_fil_6./a_anc_fil_6(1)
 disp('Filter 3 coefficients')
 b_anc_fil_9./a_anc_fil_9(1)
 a_anc_fil_9./a_anc_fil_9(1)
+
+
 
